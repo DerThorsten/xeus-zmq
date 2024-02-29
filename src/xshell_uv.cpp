@@ -21,7 +21,8 @@
 #include "xserver_uv_shell_main.hpp"
 #include "xshell_uv.hpp"
 
-// namespace py = pybind11;
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
 
 namespace xeus
 {
@@ -79,13 +80,19 @@ namespace xeus
         // Register callbacks
         p_shell_poll->on<uvw::poll_event>(
             [this](uvw::poll_event&, uvw::poll_handle&)
-            {
+            {   
+                std::cout<<"release gil"<<std::endl;
+                py::gil_scoped_acquire acquire1;
+                py::gil_scoped_release release;
                 std::cout << "Shell poll event\t"; // REMOVE
                 zmq::multipart_t wire_msg;
                 if (wire_msg.recv(m_shell, ZMQ_DONTWAIT)) // non-blocking
                 {
                     xmessage msg = p_server->deserialize(wire_msg);
+                    std::cout<<"notify_shell_listener "<<std::endl;
+                    std::cout<<"message content "<<msg.content().dump(4)<<std::endl;
                     p_server->notify_shell_listener(std::move(msg));
+                    std::cout<<"notify_shell_listener done"<<std::endl;
                 }
                 std::cout << "Done\n"; // REMOVE
             }
@@ -94,12 +101,17 @@ namespace xeus
         p_controller_poll->on<uvw::poll_event>(
             [this](uvw::poll_event&, uvw::poll_handle&)
             {
+                py::gil_scoped_acquire acquire1;
+                py::gil_scoped_release release;
                 std::cout << "Controller poll event\t"; // REMOVE
                 zmq::multipart_t wire_msg;
                 if (wire_msg.recv(m_controller, ZMQ_DONTWAIT))
                 {
+                    std::cout<<"notify_internal_listener"<<std::endl;
                     zmq::multipart_t wire_reply = p_server->notify_internal_listener(wire_msg);
+                    std::cout<<"send wire reply"<<std::endl;
                     wire_reply.send(m_controller);
+                    std::cout<<"send wire reply done"<<std::endl;
                 }
                 std::cout << "Done\n"; // REMOVE
             }
@@ -129,7 +141,7 @@ namespace xeus
 
         std::cout << "After starting polls\n"; // REMOVE
 
-        p_loop->run();
+        //p_loop->run();
 
         std::cout << "Loop done running\n"; // REMOVE
 
